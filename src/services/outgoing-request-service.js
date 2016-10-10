@@ -21,7 +21,11 @@ export function outgoingRequest({ requestId, url, options }) {
       return JSON.parse(response);
     })
     .then(null, err => {
-      logger.error(`[OUTGOING ${method} ${url}]: FAILED`, err, { requestId });
+      logger.error(
+        `[OUTGOING ${method} ${url}]: FAILED`,
+        err,
+        { requestId }
+      );
       throw err;
     });
 }

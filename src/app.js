@@ -3,13 +3,21 @@ import koaRouter from 'koa-router';
 import bodyParser from 'koa-body';
 import koaConvert from 'koa-convert';
 import helmet from 'koa-helmet';
+import mongo from 'koa-mongo';
+import mongoose from 'mongoose';
+
 import { logger } from './services/logger';
 import { generateRequestId } from './middleware/request-id-generator';
 import { errorResponder } from './middleware/error-responder';
 import { k } from './project-env';
+import { scheduleFeedsUpdate, scheduleFeedsCleanup } from './services/feeds/schedule.service';
+
 import { rootRouter } from './routes/root.routes';
 import { healthCheckRouter } from './routes/health-check/health-check.routes';
 import { demoRouter } from './routes/demo/demo.routes';
+import { feedsRouter } from './routes/feeds/feeds.routes';
+import { articlesRouter } from './routes/articles/articles.routes';
+import { publishersRouter } from './routes/publishers/publishers.routes';
 
 export const app = new Koa();
 
@@ -17,7 +25,10 @@ export const app = new Koa();
 const api = koaRouter()
   .use('/', rootRouter.routes())
   .use('/health', healthCheckRouter.routes())
-  .use('/demo', demoRouter.routes());
+  .use('/demo', demoRouter.routes())
+  .use('/feeds', feedsRouter.routes())
+  .use('/articles', articlesRouter.routes())
+  .use('/publishers', publishersRouter.routes())
 
 /* istanbul ignore if */
 if (k.REQUEST_LOGS) {
@@ -30,6 +41,7 @@ if (k.REQUEST_LOGS) {
 }
 
 app
+  .use(mongo())
   .use(helmet())
   .use(koaConvert(bodyParser()))
   .use(generateRequestId)
@@ -37,14 +49,24 @@ app
   .use(api.routes())
   .use(api.allowedMethods());
 
-function startFunction() {
+const mongoUrl = 'localhost:27017';
+mongoose.Promise = global.Promise;
+mongoose.connect(mongoUrl);
+
+function startFunction(id) {
   const PORT = process.env.PORT || 3000;
   logger.info(`Starting server on port ${PORT}`);
   app.listen(PORT);
+  // initialize scheduled feed fetching
+  if (id === 1) {
+    scheduleFeedsUpdate();
+    scheduleFeedsCleanup();
+  }
 }
 
 /* istanbul ignore if */
 if (require.main === module) {
+  // initialize cluster
   const throng = require('throng');
   throng(startFunction);
 }
